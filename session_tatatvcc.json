@@ -1,0 +1,17 @@
+{
+    "portal": "http://tatatv.cc/stalker_portal/c/",
+    "mac": "00:1A:79:00:13:DA",
+    "token": "059C77A63BC116E744C76345556EE741",
+    "cookie": "mac=00:1A:79:00:13:DA; stb_lang=en; timezone=GMT",
+    "headers": [
+        "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3",
+        "X-User-Agent: Model: MAG250; Link: WiFi",
+        "Referer: http://tatatv.cc/stalker_portal/c/",
+        "Accept: */*",
+        "Connection: Keep-Alive",
+        "Accept-Encoding: gzip",
+        "Cookie: mac=00:1A:79:00:13:DA; stb_lang=en; timezone=GMT",
+        "Authorization: Bearer 059C77A63BC116E744C76345556EE741"
+    ],
+    "portal_type": "1"
+}
