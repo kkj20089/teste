@@ -166,7 +166,8 @@ def fetch_all_channels(base_url, session, headers, portal_type):
 #
 #   IMPORTANT: PASTE YOUR CLOUDFLARE WORKER URL HERE
 #
-WORKER_URL = "https://kip.kkjkkj20089.workers.dev/" # e.g. "https://my-worker.my-name.workers.dev"
+WORKER_URL = os.getenv("WORKER_URL", "https://kip.kkjkkj20089.workers.dev/")
+
 #
 # ⬆️⬆️⬆️ ======================================================= ⬆️⬆️⬆️
 
@@ -266,3 +267,4 @@ print("📱 Open this in TiviMate, OTT Navigator, or VLC.\n")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port, debug=False)
+
