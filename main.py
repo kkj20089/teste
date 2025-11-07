@@ -1,5 +1,5 @@
 import requests, hashlib, urllib.parse, json, os, socket, re, time
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 from flask import Flask, redirect, jsonify
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -17,7 +17,7 @@ def generate_device_info(mac):
 # ===== Normalize URL =====
 def normalize_url_and_name(input_url):
     url = input_url.strip()
-    if not url.startswith("http://") and not url.startswith("https://"):
+    if not url.startswith("http://") and not url.startswith("https"):
         url = "http://" + url
     url = re.sub(r'/(stalker_portal(/c)?|c)/?$', '', url)
     parsed = urlparse(url)
@@ -66,7 +66,9 @@ def create_link(base_url, cmd, session, headers, portal_type, retries=3):
     url = f"{base_url}/{prefix}/server/load.php?type=itv&action=create_link&cmd={urllib.parse.quote(cmd)}&JsHttpRequest=1-xml"
     for attempt in range(retries):
         try:
-            resp = session.get(url, headers=headers, timeout=8)
+            # ⬇️ MODIFIED LINE: Route request through worker ⬇️
+            proxy_url = f"{WORKER_URL}?url={quote(url)}"
+            resp = session.get(proxy_url, headers=headers, timeout=8) # Use proxy_url
             if resp.status_code != 200:
                 print(f"[create_link] HTTP {resp.status_code} → {url}")
                 continue
@@ -99,24 +101,41 @@ def init_portal_session(base_url, mac, device_info, portal_type, portal_name):
     }
     session.cookies.set("mac", mac)
     try:
-        resp = session.post(handshake_url, headers=headers, timeout=10)
+        # ⬇️ MODIFIED LINE: Route request through worker ⬇️
+        proxy_handshake_url = f"{WORKER_URL}?url={quote(handshake_url)}"
+        resp = session.post(proxy_handshake_url, headers=headers, timeout=10) # Use proxy_handshake_url
+
         js = resp.json().get("js", {})
         token = js.get("token")
         if not token:
-            print("❌ Handshake failed.")
+            print("❌ Handshake failed. (No token received)")
+            print(f"[*] Server Status: {resp.status_code}")
+            print(f"[*] Server Response: {resp.text[:500]}...")
             exit(1)
         save_session_json(base_url, mac, token, portal_type, portal_name)
         headers["Authorization"] = f"Bearer {token}"
     except Exception as e:
         print("❌ Handshake failed:", str(e))
+        # Print debug info if it fails
+        try:
+            print(f"[*] Server Status: {resp.status_code}")
+            print(f"[*] Server Response: {resp.text[:500]}...")
+        except:
+            pass
         exit(1)
 
     print("[*] Validating via get_profile...")
     sn, device_id, device_id2, signature = device_info["SNCUT"], device_info["Device_ID1"], device_info["Device_ID1"], device_info["Signature"]
     profile_url = f"{base_url}/{prefix}/server/load.php?type=stb&action=get_profile&sn={sn}&device_id={device_id}&device_id2={device_id2}&signature={signature}&JsHttpRequest=1-xml"
-    resp = session.get(profile_url, headers=headers)
+
+    # ⬇️ MODIFIED LINE: Route request through worker ⬇️
+    proxy_profile_url = f"{WORKER_URL}?url={quote(profile_url)}"
+    resp = session.get(proxy_profile_url, headers=headers) # Use proxy_profile_url
+
     if "js" not in resp.text:
         print("❌ Profile validation failed.")
+        print(f"[*] Server Status: {resp.status_code}")
+        print(f"[*] Server Response: {resp.text[:500]}...")
         exit(1)
     print("✅ Profile validated successfully.\n")
     return session, headers
@@ -126,24 +145,37 @@ def fetch_all_channels(base_url, session, headers, portal_type):
     prefix = "stalker_portal" if portal_type == "1" else "c"
     url = f"{base_url}/{prefix}/server/load.php?type=itv&action=get_all_channels&JsHttpRequest=1-xml"
     print("[*] Fetching full channel list...")
-    resp = session.get(url, headers=headers, timeout=15)
+
+    # ⬇️ MODIFIED LINE: Route request through worker ⬇️
+    proxy_url = f"{WORKER_URL}?url={quote(url)}"
+    resp = session.get(proxy_url, headers=headers, timeout=15) # Use proxy_url
+
     try:
         data = resp.json()
         return data.get("js", {}).get("data", [])
-    except Exception:
+    except Exception as e:
         print("[!] Portal did not return valid JSON.")
+        print(f"[*] Exception: {e}")
+        print(f"[*] Server Status: {resp.status_code}")
+        print(f"[*] Server Response: {resp.text[:500]}...")
         return []
 
 # ===== Main =====
-# ===== Main =====
+
+# ⬇️⬇️⬇️ ======================================================= ⬇️⬇️⬇️
+#
+#   IMPORTANT: PASTE YOUR CLOUDFLARE WORKER URL HERE
+#
+WORKER_URL = "https://kip.kkjkkj20089.workers.dev/" # e.g. "https://my-worker.my-name.workers.dev"
+#
+# ⬆️⬆️⬆️ ======================================================= ⬆️⬆️⬆️
+
+
 base_url_input = "http://tatatv.cc/stalker_portal/c/"
 mac = "00:1A:79:00:13:DA"
 portal_type = "1"   # 1 = stalker_portal/c/
 mode = "2"          # 2 = Online (Flask middleware)
-
 base_url, save_name = normalize_url_and_name(base_url_input)
-
-
 device_info = generate_device_info(mac)
 session, headers = init_portal_session(base_url, mac, device_info, portal_type, save_name)
 channels = fetch_all_channels(base_url, session, headers, portal_type)
@@ -168,12 +200,18 @@ if mode == "1":
             return name, create_link(base_url, cmd, session, headers, portal_type)
 
         with ThreadPoolExecutor(max_workers=6) as executor:
-            for future in as_completed([executor.submit(fetch_real_link, ch) for ch in channels]):
+            futures = [executor.submit(fetch_real_link, ch) for ch in channels]
+            # Create a map of futures to channels to preserve order/info
+            future_to_channel = {fut: ch for fut, ch in zip(futures, channels)}
+
+            for future in as_completed(futures):
                 name, real_url = future.result()
-                ch = next((c for c in channels if c.get("name") == name), None)
+                ch = future_to_channel[future] # Get original channel data
+
                 logo = ch.get("logo", "")
                 logo_url = f"{base_url}/stalker_portal/misc/logos/320/{logo}" if portal_type == "1" else logo
                 group_title = ch.get("tv_genre_title", "All Channels")
+
                 if real_url:
                     f.write(f'#EXTINF:-1 group-title="{group_title}" tvg-logo="{logo_url}",{name}\n{real_url}\n')
                     print(f"✅ {name}")
@@ -189,7 +227,7 @@ ip = get_local_ip()
 port = 5000
 filename = f"Online_{save_name}.m3u"
 
-@app.route("/getlink/<int:ch_id>")
+@app.route("/getlink/<ch_id>") # Changed to string to be safe
 def getlink(ch_id):
     ch = next((c for c in channels if str(c.get("id")) == str(ch_id)), None)
     if not ch:
@@ -205,7 +243,10 @@ def getlink(ch_id):
 
 @app.route(f"/{filename}")
 def serve_m3u():
-    return open(filename, "r", encoding="utf-8").read(), 200, {"Content-Type": "application/x-mpegurl"}
+    try:
+        return open(filename, "r", encoding="utf-8").read(), 200, {"Content-Type": "application/x-mpegurl"}
+    except FileNotFoundError:
+        return "Playlist file not found.", 404
 
 @app.route("/")
 def index():
@@ -223,4 +264,5 @@ print(f"\n✅ Online playlist saved at: {os.path.abspath(filename)}")
 print(f"🌐 Playlist URL: http://{ip}:{port}/{filename}")
 print("📱 Open this in TiviMate, OTT Navigator, or VLC.\n")
 
-app.run(host="0.0.0.0", port=port, debug=False)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=port, debug=False)
