@@ -135,12 +135,14 @@ def fetch_all_channels(base_url, session, headers, portal_type):
         return []
 
 # ===== Main =====
-base_url_input = input("Enter Portal URL : ").strip()
-mac = input("Enter MAC Address : ").strip()
-print("\nSelect Portal Type:\n1. stalker_portal/c/\n2. /c/")
-portal_type = input("Enter 1 or 2: ").strip()
+# ===== Main =====
+base_url_input = "http://tatatv.cc/stalker_portal/c/"
+mac = "00:1A:79:00:13:DA"
+portal_type = "1"   # 1 = stalker_portal/c/
+mode = "2"          # 2 = Online (Flask middleware)
+
 base_url, save_name = normalize_url_and_name(base_url_input)
-mode = input("\nSelect Mode:\n1. Offline (fetch real m3u8 links)\n2. Online (Flask middleware)\nEnter 1 or 2: ").strip()
+
 
 device_info = generate_device_info(mac)
 session, headers = init_portal_session(base_url, mac, device_info, portal_type, save_name)
@@ -222,3 +224,4 @@ print(f"🌐 Playlist URL: http://{ip}:{port}/{filename}")
 print("📱 Open this in TiviMate, OTT Navigator, or VLC.\n")
 
 app.run(host="0.0.0.0", port=port, debug=False)
+
