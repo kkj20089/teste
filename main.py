@@ -225,4 +225,7 @@ with open(filename, "w", encoding="utf-8") as f:
 print(f"\n✅ Playlist ready: {filename}")
 print(f"🌍 Access on: https://{os.getenv('REPL_SLUG','localhost')}.{os.getenv('REPL_OWNER','local')}.repl.co/{filename}\n")
 
-app.run(host="0.0.0.0", port=port)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+
+
