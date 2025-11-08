@@ -202,7 +202,16 @@ def getlink(ch_id):
 
 @app.route(f"/{filename}")
 def serve_m3u():
-    return open(filename, "r", encoding="utf-8").read(), 200, {"Content-Type": "application/x-mpegurl"}
+    return (
+        open(filename, "r", encoding="utf-8").read(),
+        200,
+        {
+            "Content-Type": "application/x-mpegurl",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+    )
+
 
 @app.route("/")
 def index():
@@ -227,5 +236,6 @@ print(f"🌍 Access on: https://{os.getenv('REPL_SLUG','localhost')}.{os.getenv(
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+
 
 
