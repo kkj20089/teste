@@ -67,7 +67,7 @@ async def stream_handler(request):
 
         # ⚡ MEMORY SAFE MODE: 
         # Using 512KB chunks is safer for low-RAM Free Tier
-        chunk_size = 512 * 1024 
+        chunk_size = 520 * 1024 
         
         async for chunk in client.iter_download(document, chunk_size=chunk_size):
             await response.write(chunk)
