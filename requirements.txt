@@ -1,4 +1,4 @@
 telethon
 aiohttp
-cryptg
 hachoir
+pyaes
