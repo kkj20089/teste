@@ -252,11 +252,9 @@ app = Flask(__name__)
 filename = f"Online_{save_m3u_name}.m3u"
 
 # --- MODIFICATION: Detect Replit URL ---
-base_server_url = "https://teste-rdny.onrender.com:8080"
+base_server_url = "https://teste-rdny.onrender.com"
 
-port = 8080
-
-
+port = int(os.environ.get("PORT", 8080))
 
 @app.route("/getlink/<int:ch_id>")
 def getlink(ch_id):
