@@ -186,7 +186,17 @@ if not session:
 # ===== Fetch Genres =====
 prefix = "stalker_portal" if portal_type == "1" else "c"
 genre_url = f"{base_url}/{prefix}/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
-genres = session.get(genre_url, headers=headers).json().get("js", [])
+# New robust code
+try:
+    resp = session.get(genre_url, headers=headers)
+    resp.raise_for_status() # Checks for HTTP errors
+    genres = resp.json().get("js", [])
+except Exception as e:
+    print(f"❌ Error fetching genres: {e}")
+    # Print the first 200 chars of the response to see if it's HTML
+    if 'resp' in locals():
+        print(f"Server Response: {resp.text[:200]}") 
+    genres = []
 print("\nAvailable Genres:")
 for i, g in enumerate(genres, 1):
     print(f"{i}. {g['title']}")
