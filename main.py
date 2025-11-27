@@ -190,7 +190,7 @@ genres = session.get(genre_url, headers=headers).json().get("js", [])
 print("\nAvailable Genres:")
 for i, g in enumerate(genres, 1):
     print(f"{i}. {g['title']}")
-selected = input("\nEnter genre numbers (Example: 15,9,10): ")
+selected = "3,4,5,6,10,11,12,13,14,15,16.17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,59"
 selected_ids = [str(genres[int(x.strip()) - 1]['id']) for x in selected.split(",")]
 genre_titles = {str(genres[int(x.strip()) - 1]['id']): genres[int(x.strip()) - 1]['title'] for x in selected.split(",")}
 
@@ -252,7 +252,7 @@ app = Flask(__name__)
 filename = f"Online_{save_m3u_name}.m3u"
 
 # --- MODIFICATION: Detect Replit URL ---
-base_server_url = "https://6549763b-880a-4da4-9ac1-924c186e73b2-00-khawmn027tao.pike.replit.dev:8080"
+base_server_url = "https://teste-rdny.onrender.com:8080"
 
 port = 8080
 
