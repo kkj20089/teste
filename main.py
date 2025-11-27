@@ -87,9 +87,11 @@ def create_link(base_url, cmd, session, headers, portal_type, retries=3):
     for _ in range(retries):
         try:
             resp = session.get(url, headers=headers, timeout=8)
-            js = resp.json().get("js", {})
-            if isinstance(js, dict) and "cmd" in js:
-                return js["cmd"].replace("ffrt ", "").strip()
+            # Ensure the response is valid before trying to decode JSON
+            if resp.status_code == 200 and resp.text:
+                js = resp.json().get("js", {})
+                if isinstance(js, dict) and "cmd" in js:
+                    return js["cmd"].replace("ffrt ", "").strip()
         except Exception:
             continue
     return None
@@ -300,15 +302,17 @@ def getlink(ch_id):
     return response
 
 
-# --- MODIFICATION: Add route to serve the M3U file ---
+# --- MODIFICATION: Add route to serve the M3U file for browser viewing ---
 @app.route(f"/{filename}")
 def serve_playlist():
     try:
+        # Changed as_attachment=False and mimetype to text/plain so the browser displays the text content
+        # instead of attempting to download it or display it blankly.
         return send_from_directory(
             os.getcwd(), 
             filename, 
-            as_attachment=True, 
-            mimetype="audio/mpegurl"
+            as_attachment=False, 
+            mimetype="text/plain"
         )
     except FileNotFoundError:
         return jsonify({"error": "Playlist file not found. Has it been generated?"}), 404
