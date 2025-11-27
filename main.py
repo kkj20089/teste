@@ -190,7 +190,7 @@ genres = session.get(genre_url, headers=headers).json().get("js", [])
 print("\nAvailable Genres:")
 for i, g in enumerate(genres, 1):
     print(f"{i}. {g['title']}")
-selected = "3,4,5,6,10,11,12,13,14,15,16.17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,59"
+selected = "3,4,5,6,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,59"
 selected_ids = [str(genres[int(x.strip()) - 1]['id']) for x in selected.split(",")]
 genre_titles = {str(genres[int(x.strip()) - 1]['id']): genres[int(x.strip()) - 1]['title'] for x in selected.split(",")}
 
