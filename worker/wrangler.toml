@@ -1,0 +1,6 @@
+name = "revanced-update-api"
+main = "src/index.js"
+compatibility_date = "2026-03-14"
+
+[vars]
+GITHUB_REPO = "kkj20089/teste"
