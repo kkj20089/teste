@@ -217,7 +217,14 @@ def build() -> None:
     
     # Check for local APK or download link
     local_apk_path = Path("youtube.apk")
-    if local_apk_path.exists():
+    alt_local_apk = Path("youtube_20.14.43.apk")
+    
+    if alt_local_apk.exists():
+        print(f"Using local {alt_local_apk}", file=sys.stderr)
+        if alt_local_apk.resolve() != youtube_apk.resolve():
+            import shutil
+            shutil.copy(alt_local_apk, youtube_apk)
+    elif local_apk_path.exists():
         print(f"Using local youtube.apk", file=sys.stderr)
         # Verify version if possible, or just assume user knows what they are doing
         # Or better, we rename it to work/youtube.apk
