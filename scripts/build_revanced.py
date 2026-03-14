@@ -265,7 +265,7 @@ def build() -> None:
         "-jar",
         str(cli_jar),
         "patch",
-        "--patch-bundle",
+        "--patches",
         str(patches_bundle),
         "--merge",
         str(integrations_apk),
@@ -283,7 +283,7 @@ def build() -> None:
     ]
     
     for patch in selected_patches:
-        command.extend(["--include", patch])
+        command.extend(["--enable", patch])
         
     command.append(str(youtube_apk))
     
