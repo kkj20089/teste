@@ -2,6 +2,10 @@ name: Build ReVanced YouTube
 
 on:
   workflow_dispatch:
+    inputs:
+      youtube_apk_url:
+        description: "Direct download URL for YouTube APK (nodpi)"
+        required: false
   push:
     branches:
       - main
@@ -38,6 +42,7 @@ jobs:
         id: build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YOUTUBE_APK_URL: ${{ inputs.youtube_apk_url }}
         run: python scripts/build_revanced.py
 
       - name: Publish release

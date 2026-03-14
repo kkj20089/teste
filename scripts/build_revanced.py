@@ -10,8 +10,6 @@ from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
-from packaging.version import InvalidVersion, Version
-
 import config
 
 
@@ -49,6 +47,13 @@ def find_asset(assets: list[dict[str, Any]], patterns: list[str]) -> dict[str, A
     raise RuntimeError(f"No asset matched {patterns}")
 
 
+def find_asset_or_none(assets: list[dict[str, Any]], patterns: list[str]) -> dict[str, Any] | None:
+    try:
+        return find_asset(assets, patterns)
+    except RuntimeError:
+        return None
+
+
 def download_file(url: str, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with requests.get(url, stream=True, timeout=180) as response:
@@ -59,53 +64,25 @@ def download_file(url: str, path: Path) -> None:
                     handle.write(chunk)
 
 
-def collect_package_versions(node: Any, package_name: str, out: set[str]) -> None:
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if key == package_name and isinstance(value, list):
-                for v in value:
-                    if isinstance(v, str) and re.fullmatch(r"\d+\.\d+\.\d+", v):
-                        out.add(v)
-            if key in {"compatiblePackages", "compatible_packages"} and isinstance(value, dict):
-                versions = value.get(package_name)
-                if isinstance(versions, list):
-                    for v in versions:
-                        if isinstance(v, str) and re.fullmatch(r"\d+\.\d+\.\d+", v):
-                            out.add(v)
-            if key in {"compatiblePackages", "compatible_packages"} and isinstance(value, list):
-                for item in value:
-                    if not isinstance(item, dict):
-                        continue
-                    name = item.get("name") or item.get("packageName")
-                    versions = item.get("versions")
-                    if name == package_name and isinstance(versions, list):
-                        for v in versions:
-                            if isinstance(v, str) and re.fullmatch(r"\d+\.\d+\.\d+", v):
-                                out.add(v)
-            collect_package_versions(value, package_name, out)
-    if isinstance(node, list):
-        for value in node:
-            collect_package_versions(value, package_name, out)
-
-
-def highest_version(versions: set[str]) -> str:
-    parsed: list[tuple[Version, str]] = []
-    for value in versions:
-        try:
-            parsed.append((Version(value), value))
-        except InvalidVersion:
-            continue
-    if not parsed:
-        raise RuntimeError("No compatible YouTube versions found")
-    parsed.sort(key=lambda item: item[0], reverse=True)
-    return parsed[0][1]
-
-
-def supported_youtube_version(patches_json: Path) -> str:
-    payload = json.loads(patches_json.read_text(encoding="utf-8"))
-    versions: set[str] = set()
-    collect_package_versions(payload, config.YOUTUBE_PACKAGE, versions)
-    return highest_version(versions)
+def resolve_supported_youtube_version_from_cli(cli_jar: Path, patches_bundle: Path) -> str:
+    command = [
+        "java",
+        "-jar",
+        str(cli_jar),
+        "list-versions",
+        "-f",
+        config.YOUTUBE_PACKAGE,
+        str(patches_bundle),
+    ]
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+    output = result.stdout + "\n" + result.stderr
+    versions = re.findall(r"\b(\d+\.\d+\.\d+)\s+\(\d+\s+patches\)", output)
+    if versions:
+        return versions[0]
+    fallback = re.findall(r"\b(\d+\.\d+\.\d+)\b", output)
+    if fallback:
+        return fallback[0]
+    raise RuntimeError("Could not resolve a compatible YouTube version from ReVanced CLI")
 
 
 def parse_html(url: str) -> BeautifulSoup:
@@ -224,26 +201,58 @@ def build() -> None:
     patches_asset = find_asset(
         patches_release.get("assets", []), [r"revanced-patches-.*\.rvp$", r"\.rvp$", r"\.jar$"]
     )
-    patches_json_asset = find_asset(patches_release.get("assets", []), [r"patches\.json$"])
     integrations_asset = find_asset(integrations_release.get("assets", []), [r"\.apk$"])
 
     cli_jar = work / cli_asset["name"]
     patches_bundle = work / patches_asset["name"]
-    patches_json = work / patches_json_asset["name"]
     integrations_apk = work / integrations_asset["name"]
     youtube_apk = work / "youtube.apk"
     patched_apk = dist / "youtube-revanced.apk"
 
     download_file(cli_asset["browser_download_url"], cli_jar)
     download_file(patches_asset["browser_download_url"], patches_bundle)
-    download_file(patches_json_asset["browser_download_url"], patches_json)
     download_file(integrations_asset["browser_download_url"], integrations_apk)
 
-    yt_version = supported_youtube_version(patches_json)
-    yt_url = resolve_youtube_download_url(yt_version)
-    download_file(yt_url, youtube_apk)
+    yt_version = resolve_supported_youtube_version_from_cli(cli_jar, patches_bundle)
+    
+    # Check for local APK or download link
+    local_apk_path = Path("youtube.apk")
+    if local_apk_path.exists():
+        print(f"Using local youtube.apk", file=sys.stderr)
+        # Verify version if possible, or just assume user knows what they are doing
+        # Or better, we rename it to work/youtube.apk
+        if local_apk_path.resolve() != youtube_apk.resolve():
+            import shutil
+            shutil.copy(local_apk_path, youtube_apk)
+    elif os.getenv("YOUTUBE_APK_URL"):
+        print(f"Downloading YouTube APK from provided URL", file=sys.stderr)
+        download_file(os.getenv("YOUTUBE_APK_URL"), youtube_apk)
+    else:
+        print(f"Attempting to download YouTube {yt_version} from APKMirror", file=sys.stderr)
+        try:
+            yt_url = resolve_youtube_download_url(yt_version)
+            download_file(yt_url, youtube_apk)
+        except Exception as e:
+            print(f"Failed to download from APKMirror: {e}", file=sys.stderr)
+            print(f"Please manually download YouTube {yt_version} (nodpi) and place it as 'youtube.apk' in the root directory.", file=sys.stderr)
+            print(f"Or provide a direct download link via YOUTUBE_APK_URL environment variable.", file=sys.stderr)
+            sys.exit(1)
 
     keystore = workspace / config.KEYSTORE_FILE
+    
+    # Exact patches requested by user
+    selected_patches = [
+        "Playback speed",
+        "Video quality",
+        "GmsCore support",
+        "Hide ads",
+        "Video ads",
+        "Downloads",
+        "Disable resuming Shorts on startup",
+        "Remove background playback restrictions",
+        "Check watch history domain name resolution"
+    ]
+    
     command = [
         "java",
         "-jar",
@@ -263,8 +272,14 @@ def build() -> None:
         config.KEY_ALIAS,
         "--keystore-entry-password",
         config.KEY_ALIAS_PASSWORD,
-        str(youtube_apk),
+        "--exclusive"  # Only include explicitly specified patches
     ]
+    
+    for patch in selected_patches:
+        command.extend(["--include", patch])
+        
+    command.append(str(youtube_apk))
+    
     run_command(command)
 
     build_tag = f"rv-{patches_release['tag_name'].replace('.', '-')}-{yt_version.replace('.', '-')}"
